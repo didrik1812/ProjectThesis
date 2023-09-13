@@ -251,3 +251,4 @@ rsconnect/
 
 
 data/
+*.tar.gz
