@@ -33,16 +33,16 @@ X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test
 
 # %%
 # Elastic net for feature selection
-selector = SelectFromModel(ElasticNet(l1_ratio=0.5))
-selector.fit(X_train, y_train)
+# selector = SelectFromModel(ElasticNet(l1_ratio=0.5))
+# selector.fit(X_train, y_train)
 
-X_train_val_red = selector.transform(X_train_val)
-X_train_red = selector.transform(X_train)
-X_val_red = selector.transform(X_val)
-X_test_red = selector.transform(X_test)
+# X_train_val_red = selector.transform(X_train_val)
+# X_train_red = selector.transform(X_train)
+# X_val_red = selector.transform(X_val)
+# X_test_red = selector.transform(X_test)
 
-print("Original shape",X_train.shape)
-print("Reduced shape",X_train_red.shape)
+# print("Original shape",X_train.shape)
+# print("Reduced shape",X_train_red.shape)
 
 # %%
 # hyperparameter tuning by baeysian optimization
@@ -58,8 +58,8 @@ space = {
 
 def objective(params):
     xgb_r = XGBRegressor(**params)
-    xgb_r.fit(X_train_red, y_train)
-    y_pred = xgb_r.predict(X_val_red)  
+    xgb_r.fit(X_train, y_train)
+    y_pred = xgb_r.predict(X_val)  
     score = mean_squared_error(y_val, y_pred, squared=False)
     return {"loss": score, "status": STATUS_OK}
 
@@ -69,8 +69,8 @@ print("Best Hyperparamters:",best)
 
 # %%
 final_xgb = XGBRegressor(**best) # type: ignore
-final_xgb.fit(X_train_val_red, y_train_val)
-y_pred = final_xgb.predict(X_test_red)
+final_xgb.fit(X_train_val, y_train_val)
+y_pred = final_xgb.predict(X_test)
 
 score = mean_squared_error(y_test, y_pred, squared=False)
 corr = pearsonr(y_test, y_pred)
