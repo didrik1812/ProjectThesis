@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection  import cross_validate
-from sklearn.feature_selection import SelectFromModel, chi2, SelectPercentile
+from sklearn.feature_selection import SelectFromModel, mutual_info_regression, SelectPercentile, f_regression
 from sklearn.linear_model import ElasticNet
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import OneHotEncoder
@@ -29,7 +29,7 @@ SNP_data.fillna(0)
 Y = mass_residuals.ID
 SNP_data = OneHotEncoder().fit_transform(SNP_data)
 print("Original shape:",SNP_data.shape)
-sel = SelectPercentile(chi2, percentile=10).fit(SNP_data, Y)
+sel = SelectPercentile(f_regression, percentile=10).fit(SNP_data.toarray(), Y)
 SNP_data = sel.transform(SNP_data)
 print("Reduced shape:",SNP_data.shape)
 X_train_val, X_test, y_train_val, y_test = train_test_split(SNP_data, Y, test_size=0.2, random_state=42)
@@ -84,7 +84,7 @@ print("p-value:",corr[1])
 print("Final RMSE:",score)
 
 # %%
-pickle.dump(final_xgb, open("../models/xgb_bayesoptim_chiselection_full.pkl", "wb"))
+pickle.dump(final_xgb, open("../models/xgb_bayesoptim_Fregselection_full.pkl", "wb"))
 
 
 
