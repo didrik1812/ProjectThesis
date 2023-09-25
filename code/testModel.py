@@ -40,7 +40,8 @@ class testModel:
     best_params = {}
     CV_results = {}
     selection_method: str = "shap"
-    hyperCV:bool = False
+    hyperCV: bool = False
+    feature_percentile: float = 0.1
 
     def cross_validate(self):
         print("Starting cross validation")
@@ -90,11 +91,15 @@ class testModel:
             sorted_features = self.X_train_val.columns[
                 np.argsort(feature_importances)[::-1]
             ]
-            num_features = int(len(self.X.columns) * 0.10)
+            num_features = int(len(self.X.columns) * self.feature_percentile)
             self.X_train_val = self.X_train_val[sorted_features[:num_features]]
             self.X_test = self.X_test[sorted_features[:num_features]]
 
-            self.sel = {"method": "shap", "features": sorted_features[:num_features]}
+            self.sel = {
+                "method": "shap",
+                "num_features": num_features,
+                "features": sorted_features[:num_features],
+            }
 
         elif self.selection_method == "f_reg":
             print("Selecting features using f_regression")
@@ -132,12 +137,15 @@ class testModel:
                 except:
                     print("score func not working")
                     losses[tunefold] = mean_squared_error(self.Y_val, self.y_pred)
-                return {
-                    "loss": np.mean(losses),
-                    "loss_variance": np.var(losses),
-                    "status": STATUS_OK,
-                }
+            return {
+                "loss": np.mean(losses),
+                "loss_variance": np.var(losses),
+                "status": STATUS_OK,
+            }
         else:
+            self.X_train, self.X_val, self.Y_train, self.Y_val = train_test_split(
+                self.X_train_val, self.Y_train_val, test_size=0.3, random_state=42
+            )
             self.model.fit(self.X_train_val, self.Y_train_val)
             self.y_pred = self.model.predict(self.X_test)
             try:
@@ -206,3 +214,8 @@ class testModel:
         plt.xlabel("Fold")
         plt.grid()
         plt.savefig(f"models/{self.name}/{self.name}_corr.png")
+
+        plt.figure(3)
+        plt.title("Overall preformance")
+        sns.boxplot(data=pd.DataFrame({"MSE": scores, "pearson_corr": corrs}))
+        plt.savefig(f"models/{self.name}/{self.name}_boxplot.png")
