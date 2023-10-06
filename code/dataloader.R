@@ -12,6 +12,9 @@
 # Packages needed for the script to run:
 setwd("C:\\Users\\didri\\OneDrive - NTNU\\9.semester\\Prosjekt\\ProjectThesis\\code")
 
+args <- commandArgs(trailingOnly = TRUE)
+phenotype <- args[1]
+
 if (!require(nadiv)) {
     install.packages("nadiv", repos = "http://cran.us.r-project.org")
 }
@@ -48,6 +51,12 @@ if (!require(MCMCglmm)) {
 if (!require(feather)) {
     install.packages("feather", repos = "http://cran.us.r-project.org")
 }
+
+
+
+
+# Sys.setenv(NOT_CRAN = "true")
+# install.packages("arrow")
 
 library(nadiv)
 library(pedigree)
@@ -98,37 +107,38 @@ d.morph$IDC4 <- d.morph$IDC3 <- d.morph$IDC2 <- d.morph$IDC
 ##############################################
 
 # keep all mass records that are not NA
-d.mass <- d.morph[!is.na(d.morph$mass), c("ringnr", "mass")]
-names(d.mass) <- c("ringnr", "mass")
+d.pheno <- d.morph[!is.na(d.morph[phenotype]), c("ringnr", phenotype)]
+names(d.pheno) <- c("ringnr", phenotype)
 
-d.mean.mass <- as.data.frame(d.mass %>%
+
+d.mean.pheno <- as.data.frame(d.pheno %>%
     group_by(ringnr) %>%
-    summarize(mean_mass = mean(mass)))
+    summarize(mean_pheno = mean(eval(as.symbol(phenotype)))))
 
-formula.mass.lmm <- mass ~   sex + FGRM + month + age + outer + other +
+formula.pheno.lmm <- eval(as.symbol(phenotype)) ~   sex + FGRM + month + age + outer + other +
     (1 | island_current) +
     (1 | hatchyear) +
     (1 | ringnr)
 
 
 library(lme4)
-dd <- d.morph[!is.na(d.morph$mass), ]
-r.mass.lmer <- lmer(formula.mass.lmm, data = dd)
+dd <- d.morph[!is.na(d.morph[phenotype]), ]
+r.pheno.lmer <- lmer(formula.pheno.lmm, data = dd)
 
 # Residuals
-d.mass.res <- data.frame(ringnr = dd$ringnr, mass_res = residuals(r.mass.lmer))
+d.pheno.res <- data.frame(ringnr = dd$ringnr, pheno_res = residuals(r.pheno.lmer))
 
 # Mean over repeats for each individual
-d.mean.mass.res <- as.data.frame(d.mass.res %>%
+d.mean.pheno.res <- as.data.frame(d.pheno.res %>%
     group_by(ringnr) %>%
-    summarize(mean_mass_res = mean(mass_res)))
+    summarize(mean_pheno_res = mean(pheno_res)))
 
 # ID effect
-d.ID.mass <- data.frame(ringnr = d.mean.mass[, 1], ID.mass = ranef(r.mass.lmer)$ringnr)
+d.ID.pheno <- data.frame(ringnr = d.mean.pheno[, 1], ID.mass = ranef(r.pheno.lmer)$ringnr)
 
 
 # We take as the new phenotype the estimated ID effect:
-d.ID.mass <- data.frame(ringnr = d.mean.mass[, 1], ID = d.ID.mass[, 2])
+d.ID.pheno <- data.frame(ringnr = d.mean.pheno[, 1], ID = d.ID.pheno[, 2])
 
 # ## This was the OLD way - I don't think it should be done:
 # # We take as the new phenotype the sum of the ID effect and the mean of the residual for each individual:
@@ -155,7 +165,7 @@ SNP.matrix.reduced <- cbind(
 
 
 # Generate a data frame where individuals with ring numbers from d.ID.res.mass are contained, as well as the phenotype (here the residuals from the lmer analysis with mass as response)
-d.dat <- merge(d.ID.mass[, c("ringnr", "ID")], SNP.matrix.reduced, by = "ringnr")
-d.dat.full <- merge(d.ID.mass[, c("ringnr", "ID")], SNP.matrix, by = "ringnr")
+d.dat <- merge(d.ID.pheno[, c("ringnr", "ID")], SNP.matrix.reduced, by = "ringnr")
+d.dat.full <- merge(d.ID.pheno[, c("ringnr", "ID")], SNP.matrix, by = "ringnr")
 
-write_feather(d.dat.full, "../data/d.dat.full.feather")
+write_feather(d.dat.full, paste("../data/", phenotype, ".feather", sep = ""))
