@@ -230,7 +230,7 @@ rsconnect/
 
 ### VisualStudioCode ###
 .vscode/*
-!.vscode/settings.json
+.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
@@ -252,3 +252,16 @@ rsconnect/
 
 data/
 *.tar.gz
+code/catboost_info/
+selectors/
+models/
+code/__pycache__/
+code/models/
+code/results/*.pkl
+code/results/*.txt
+
+dummy.py
+result_viz.py
+result_viz.ipynb
+
+figs/

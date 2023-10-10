@@ -43,18 +43,6 @@ X_train, X_val, y_train, y_val = train_test_split(
     X_train_val, y_train_val, test_size=0.2, random_state=42
 )
 
-# %%
-# Elastic net for feature selection
-# selector = SelectFromModel(ElasticNet(l1_ratio=0.5))
-# selector.fit(X_train, y_train)
-
-# X_train_val_red = selector.transform(X_train_val)
-# X_train_red = selector.transform(X_train)
-# X_val_red = selector.transform(X_val)
-# X_test_red = selector.transform(X_test)
-
-# print("Original shape",X_train.shape)
-# print("Reduced shape",X_train_red.shape)
 
 # %%
 # hyperparameter tuning by baeysian optimization

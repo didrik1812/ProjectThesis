@@ -7,7 +7,9 @@
 ## !! This requires that you are using R version 4.2 or higher (ideally even 4.3) !!
 #######################################################################
 # Packages needed for the script to run:
-setwd("C:\\Users\\didri\\OneDrive - NTNU\\9.semester\\Prosjekt\\ProjectThesis\\code")
+#setwd("C:\\Users\\didri\\OneDrive - NTNU\\9.semester\\Prosjekt\\ProjectThesis\\code")
+setwd("/home/shomec/d/didrikls/ProjectThesis/code/ML_and_AnimalModeling_houseSparrows.R")
+
 
 library(nadiv)
 library(pedigree)
@@ -297,7 +299,7 @@ isSymmetric(G)
 GG <- G[d.map[1:3116,3],d.map[1:3116,3]]
 
 # To ensure that the matrix is positive definite, we do a computational trick (proposed by vanRaden 2008, see https://doi.org/10.3168/jds.2007-0980 :)
-GGG  <- GG*0.99 + 0.01*AAA
+GGG  <- GG*0.99 + 0.01*AAA # replace by Identity matrix
 
 # Need to derive the inverse to give to INLA
 Cmatrix <- solve(GGG)
