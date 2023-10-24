@@ -34,7 +34,7 @@ xgboost_space = {
 def load_data(phenotype="mass"):
     """Load data from RDS file"""
     print("LOADING DATA")
-    data_path = "/../../../../../../work/didrikls/ProjectThesis/data/"
+    data_path = "//..//..//..//..//..//..//work//didrikls//ProjectThesis//data//"
     print("Running R script to load data")
     if not os.path.isfile(data_path + phenotype + ".feather"):
         res = subprocess.call(f"Rscript --vanilla dataloader.R {phenotype}", shell=True)
@@ -60,7 +60,7 @@ def load_pickle_data():
 
 
 def main():
-    phenotype = "tarsus"
+    phenotype = "mass"
     mass_residuals = load_data(phenotype=phenotype)
     SNP_data = mass_residuals.iloc[:, 7:]
     SNP_data.fillna(0, inplace=True)
@@ -70,14 +70,15 @@ def main():
     ringnrs = mass_residuals.ringnr
     print("Starting model exploration")
     XGBcv = testModel(
-        model=XGBRegressor,
+        model="INLA",
         X=SNP_data,
         Y=Y,
         search_space=xgboost_space,
-        name="xgboostTelastic",
+        name="GBLUPM",
         num_trials=30,
-        selection_method="elasticnet",
+        selection_method="corr",
         phenotype=phenotype,
+        ringnrs=ringnrs,
     )
     XGBcv.cross_validate()
 

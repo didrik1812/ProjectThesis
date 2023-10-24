@@ -6,7 +6,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import cross_validate
 from sklearn.feature_selection import (
     SelectFromModel,
     mutual_info_regression,
@@ -23,6 +22,7 @@ from sklearn.model_selection import KFold
 import os
 from sklearn.ensemble import RandomForestRegressor
 from shap import TreeExplainer
+import subprocess
 
 
 @dataclass
@@ -45,6 +45,8 @@ class testModel:
     feature_percentile: float = 0.1
     num_trials: int = 20
     iterations: int = None
+    ringnrs: pd.Series = None
+    data_path = "~//..//..//..//..//work//didrikls//ProjectThesis//data//"
 
     def cross_validate(self):
         print("Starting cross validation")
@@ -52,7 +54,7 @@ class testModel:
             "feature_percentile", 0.1, 0.9
         )
         if self.selection_method == "elasticnet":
-            self.search_space["l1ratio"] = hp.uniform("l1ratio", 0.009, 0.09)
+            self.search_space["l1ratio"] = hp.uniform("l1ratio", 0.009, 0.05)
 
         kf = KFold(n_splits=10, shuffle=True, random_state=42)
         for fold, (train_val_index, test_index) in enumerate(kf.split(self.X)):
@@ -65,9 +67,12 @@ class testModel:
                 self.Y.iloc[test_index],
             )
             print("Fold", fold + 1, "of", kf.get_n_splits(self.X))
-
-            self.hyperparameter_tuning()
-            self.eval()
+            if isinstance(self.model, str):
+                if self.model == "INLA":
+                    self.run_INLA(train_val_index, test_index)
+            else:
+                self.hyperparameter_tuning()
+                self.eval()
 
             self.CV_results[fold] = {
                 "scores": self.score,
@@ -81,12 +86,14 @@ class testModel:
         self.best_settings = max(
             self.CV_results, key=lambda x: self.CV_results[x]["corrs"]
         )
-        self.best_model = self.model(**self.CV_results[self.best_settings]["best_params"])  # type: ignore
+        if not isinstance(self.model, str):
+            self.best_model = self.model(**self.CV_results[self.best_settings]["best_params"])  # type: ignore
         self.best_score = self.CV_results[self.best_settings]["scores"]
         self.best_corr = self.CV_results[self.best_settings]["corrs"]
         self.best_feat_perc = self.CV_results[self.best_settings]["feature_percentile"]
         print(
-            f"Preformance of {self.name}:\t MSE = {self.best_score}\t corr = {self.best_corr}\t feature_percentile = {self.best_feat_perc}"
+            f"""Preformance of {self.name}:\t MSE = {self.best_score}\t
+            corr = {self.best_corr}\t feature_percentile = {self.best_feat_perc}"""
         )
         self.save()
 
@@ -252,7 +259,7 @@ class testModel:
         """Save model to file"""
 
         os.makedirs(f"models/{self.name}", exist_ok=True)
-        os.makedirs(f"results", exist_ok=True)
+        os.makedirs("results", exist_ok=True)
 
         self.plot()
         with open(f"models/{self.name}/{self.name}.pkl", "wb") as f:
@@ -260,7 +267,7 @@ class testModel:
         with open(f"models/{self.name}/{self.name}_best_sel.pkl", "wb") as f:
             pickle.dump(self.CV_results[self.best_settings]["sel"], f)
 
-        with open(f"results/results.txt", "a") as f:
+        with open("results/results.txt", "a") as f:
             f.write(
                 f"""{self.name}:\tsocre = {self.best_score}, corr = {self.best_corr}\n"""
             )
@@ -268,11 +275,14 @@ class testModel:
     def plot(self):
         """Plot results, score and correlation"""
         plt.figure(1)
-        x = sorted(
-            self.CV_results,
-            key=lambda x: self.CV_results[x]["feature_percentile"],
-            reverse=False,
-        )
+        if not isinstance(self.model, str):
+            x = sorted(
+                self.CV_results,
+                key=lambda x: self.CV_results[x]["feature_percentile"],
+                reverse=False,
+            )
+        else:
+            x = self.CV_results.keys()
         scores = [self.CV_results[key]["scores"] for key in x]
         corrs = [self.CV_results[key]["corrs"] for key in x]
         feature_percentiles = [self.CV_results[key]["feature_percentile"] for key in x]
@@ -284,7 +294,8 @@ class testModel:
 
             corrs_df[self.name] = corrs
             MSE_df[self.name] = scores
-            feat_perc_df[self.name] = feature_percentiles
+            if not isinstance(self.model, str):
+                feat_perc_df[self.name] = feature_percentiles
 
         except:
             corrs_df = pd.DataFrame({self.name: corrs})
@@ -304,12 +315,13 @@ class testModel:
         plt.grid()
         plt.savefig(f"models/{self.name}/{self.name}_corr.png")
 
-        plt.figure(3)
-        plt.plot(feature_percentiles, scores)
-        plt.title(f"{self.score_func.__name__} over feature percentile")
-        plt.xlabel("Feature selection percentile")
-        plt.grid()
-        plt.savefig(f"models/{self.name}/{self.name}_featperc.png")
+        if not isinstance(self.model, str):
+            plt.figure(3)
+            plt.plot(feature_percentiles, scores)
+            plt.title(f"{self.score_func.__name__} over feature percentile")
+            plt.xlabel("Feature selection percentile")
+            plt.grid()
+            plt.savefig(f"models/{self.name}/{self.name}_featperc.png")
 
         corrs_df.to_pickle("results/corrs_df.pkl")
         MSE_df.to_pickle("results/MSE_df.pkl")
@@ -343,7 +355,7 @@ class testModel:
         )
         plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
         plt.tight_layout()
-        plt.savefig(f"results/MSE_boxplot.png", bbox_inches="tight")
+        plt.savefig("results/MSE_boxplot.png", bbox_inches="tight")
 
         plt.figure(5)
         plt.title("Overall corr")
@@ -352,20 +364,49 @@ class testModel:
         )
         plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
         plt.tight_layout()
-        plt.savefig(f"results/corr_boxplot.png", bbox_inches="tight")
+        plt.savefig("results/corr_boxplot.png", bbox_inches="tight")
 
-        plt.figure(6)
-        plt.title("Overall Feature percentile")
-        sns.boxplot(
-            data=plot_df,
-            x="phenotype",
-            y="feat_perc",
-            hue="model",
-            orient="v",
-            width=0.5,
-        )
-        plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-        plt.tight_layout()
-        plt.savefig(f"results/feat_perc_boxplot.png", bbox_inches="tight")
+        if not isinstance(self.model, str):
+            plt.figure(6)
+            plt.title("Overall Feature percentile")
+            sns.boxplot(
+                data=plot_df,
+                x="phenotype",
+                y="feat_perc",
+                hue="model",
+                orient="v",
+                width=0.5,
+            )
+            plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+            plt.tight_layout()
+            plt.savefig("results/feat_perc_boxplot.png", bbox_inches="tight")
 
         plot_df.to_pickle("results/plot_df.pkl")
+
+    def run_INLA(self, train_val_index, test_index):
+        train_ringnrs = (
+            self.ringnrs.iloc[train_val_index]
+            .to_frame()
+            .reset_index()
+            .to_feather(self.data_path + "temp//ringnr_train.feather")
+        )
+        test_ringnrs = (
+            self.ringnrs.iloc[test_index]
+            .to_frame()
+            .reset_index()
+            .to_feather(self.data_path + "temp//ringnr_test.feather")
+        )
+        res = subprocess.call(
+            f"Rscript --vanilla runINLA.R {self.phenotype}", shell=True
+        )
+        if res == 0:
+            results = pd.read_feather(self.data_path + "//temp//INLA_result.feather")
+
+            self.score = float(results["score"].iloc[0])
+            self.corr = float(results["corr"].iloc[0])
+            self.best_params = None
+            self.feature_percentile = None
+            self.sel = None
+        else:
+            print(res)
+            quit()

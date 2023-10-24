@@ -36,14 +36,16 @@ def load_data(phenotype="mass"):
     print("LOADING DATA")
     data_path = "/../../../../../../work/didrikls/ProjectThesis/data/"
     print("Running R script to load data")
-    if not os.path.isfile(data_path + phenotype + ".feather"):
-        res = subprocess.call(f"Rscript --vanilla dataloader.R {phenotype}", shell=True)
+    if not os.path.isfile(data_path + "envGene_" + phenotype + ".feather"):
+        res = subprocess.call(
+            f"Rscript --vanilla envGendataloader.R {phenotype}", shell=True
+        )
     else:
         res = 0
 
     if res == 0:
         print("R script completed successfully")
-        rds_path = data_path + phenotype + ".feather"
+        rds_path = data_path + "envGene_" + phenotype + ".feather"
         mass_residuals = pd.read_feather(rds_path)
         print("DATA LOADED")
         return mass_residuals
@@ -51,22 +53,16 @@ def load_data(phenotype="mass"):
         raise Exception("Could not load data")
 
 
-def load_pickle_data():
-    print("LOADING DATA")
-    pickle_path = "../data/mass_resid_df.pkl"
-    mass_residuals = pd.read_pickle(pickle_path)
-    print("DATA LOADED")
-    return mass_residuals
-
-
 def main():
     phenotype = "tarsus"
     mass_residuals = load_data(phenotype=phenotype)
-    SNP_data = mass_residuals.iloc[:, 7:]
-    SNP_data.fillna(0, inplace=True)
-    SNP_data = SNP_data.astype(int)
+    SNP_data = mass_residuals.iloc[:, 2:]
+    # SNP_data.fillna(0, inplace=True)
+    # SNP_data = SNP_data.astype(int)
     # SNP_data = SNP_data.astype("category")
-    Y = mass_residuals.ID
+    SNP_data.hatchyear = SNP_data.hatchyear.astype(int)
+    # SNP_data.island_current = SNP_data.island_current.astype(int)
+    Y = mass_residuals.loc[:, phenotype]
     ringnrs = mass_residuals.ringnr
     print("Starting model exploration")
     XGBcv = testModel(
@@ -74,9 +70,9 @@ def main():
         X=SNP_data,
         Y=Y,
         search_space=xgboost_space,
-        name="xgboostTelastic",
+        name="xgboostEGT_R",
         num_trials=30,
-        selection_method="elasticnet",
+        selection_method="corr",
         phenotype=phenotype,
     )
     XGBcv.cross_validate()

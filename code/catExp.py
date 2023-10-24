@@ -29,15 +29,19 @@ xgboost_space = {
 }
 
 
-def load_data():
+def load_data(phenotype="mass"):
     """Load data from RDS file"""
     print("LOADING DATA")
+    data_path = "~//..//..//..//..//work//didrikls//ProjectThesis//data//"
     print("Running R script to load data")
-    # res = subprocess.call("Rscript dataloader.R", shell=True)
-    res = 0
+    if not os.path.isfile(data_path):
+        res = subprocess.call(f"Rscript --vanilla dataloader.R {phenotype}", shell=True)
+    else:
+        res = 0
+        
     if res == 0:
         print("R script completed successfully")
-        rds_path = "../data/d.dat.full.feather"
+        rds_path = data_path + phenotype + ".feather"
         mass_residuals = pd.read_feather(rds_path)
         print("DATA LOADED")
         return mass_residuals
@@ -54,7 +58,8 @@ def load_pickle_data():
 
 
 def main():
-    mass_residuals = load_pickle_data()
+    phenotype = "tarsus"
+    mass_residuals = load_data(phenotype=phenotype)
     SNP_data = mass_residuals.iloc[:, 7:]
     SNP_data.fillna(0, inplace=True)
     SNP_data = SNP_data.astype(int)
@@ -65,11 +70,11 @@ def main():
         X=SNP_data,
         Y=Y,
         search_space=catboost_space,
-        name="catboostCorrCat",
+        name="catboostT",
         num_trials=30,
         iterations=100,
         selection_method="corr",
-        phenotype="bodymass",
+        phenotype=phenotype,
     ).cross_validate()
 
 

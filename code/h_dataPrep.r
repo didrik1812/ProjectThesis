@@ -1,11 +1,12 @@
 #-----------------------------------------------------------------------
 # load some data 
-d.year <- read.table("../data/spuRvebasen-hatchyear-island_1993-2016_february2017_forSteffi.csv", header = T, sep=",")
+data_path = "~/../../../../work/didrikls/ProjectThesis/data/"
+d.year <- read.table(paste(data_path,"spuRvebasen-hatchyear-island_1993-2016_february2017_forSteffi.csv", sep = ""), header = T, sep=",")
 
 # morphological traits for individuals on the 8 islands of interest:
-d.morph <- read.table("../data/RepeatedAdMorph-200K-Helgeland_20170623_extrainfo.csv", header=T, sep=",")# sep="\t")
+d.morph <- read.table(paste(data_path,"RepeatedAdMorph-200K-Helgeland_20170623_extrainfo.csv", sep = ""), header=T, sep=",")# sep="\t")
 # the following ringumbers must be removed, because they were duplicated:
-d.remove <- read.table("../data/Duplicates_to_remove_200kSNP.txt", header=F)
+d.remove <- read.table(paste(data_path,"Duplicates_to_remove_200kSNP.txt", sep = ""), header=F)
 d.morph <- d.morph[!(d.morph$ringnr %in% d.remove[,1]),]
 # strore in island variable the adult SNP island (as it was in the morph file before Dec 15 2017)
 d.morph$island <- d.morph$adultSNPisland
@@ -20,7 +21,7 @@ d.morph[d.morph$wing <0,"wing"] <- NA
 # d.natal <- read.table("../data_dispersal/TrueNatalIslands_20180604.txt", header=T, sep=" ")  #
 ### Again new data on 21.11.2018
 #d.natal <- read.table("../data_dispersal/Dispersaldata_20181121.txt", header=T, sep=" ") 
- d.natal <- read.table("../data/Dispersaldata_20210311.txt", header=T, sep=" ")
+ d.natal <- read.table(paste(data_path,"Dispersaldata_20210311.txt", sep = ""), header=T, sep=" ")
  
  d.natal$NatalIsland <- d.natal$natal.island
 
@@ -46,15 +47,15 @@ d.year$islandIO <- ifelse(d.year$natalisland %in% c(22,23,24,88),"outer",ifelse(
 
 
 ## Load the morph data from Alina, where inbreeding coefficients should be ok (as per 7.11.17)
-data_morph_Alina <- read.table("../data/steffie_inbreeding_morph_data_071117.txt", header = T, stringsAsFactors = F)
+data_morph_Alina <- read.table(paste(data_path,"steffie_inbreeding_morph_data_071117.txt", sep = ""), header = T, stringsAsFactors = F)
 
 d.morph$FGRM <- data_morph_Alina[match(d.morph$ringnr,data_morph_Alina$IID),"FGRM"]
 
 # a map of Ringnr and ID for the d.morph file
-d.MAP <-  read.table("../data/Ringnr_ID_Link_N3147_SNP183384.csv", header = T, sep=",")
+d.MAP <-  read.table(paste(data_path,"Ringnr_ID_Link_N3147_SNP183384.csv", sep = ""), header = T, sep=",")
 
 #Import the pedigree; new pedigree from Alina (5.12.2017) (to be updated again) ------------------
-d.ped <- read.table("../data/SNP_pedigree_Helgeland_05122017.txt", header = T, sep=" ")
+d.ped <- read.table(paste(data_path,"SNP_pedigree_Helgeland_05122017.txt",sep = ""), header = T, sep=" ")
 
 # Change the order for sire and dam to be compatible with the code below
 d.ped <- d.ped[,c("id","sire","dam")]
