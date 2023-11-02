@@ -17,8 +17,8 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import OneHotEncoder
 from catboost import CatBoostRegressor
 import pickle
-from scipy.stats import pearsonr
-from sklearn.model_selection import KFold
+from scipy.stats import pearsonr, spearmanr
+from sklearn.model_selection import KFold, GroupKFold
 import os
 from sklearn.ensemble import RandomForestRegressor
 from shap import TreeExplainer
@@ -46,7 +46,10 @@ class testModel:
     num_trials: int = 20
     iterations: int = None
     ringnrs: pd.Series = None
+    mean_pheno: pd.Series = None
     data_path = "~//..//..//..//..//work//didrikls//ProjectThesis//data//"
+    typeofmod: str = "G"
+    crossval_on_ind: bool = False
 
     def cross_validate(self):
         print("Starting cross validation")
@@ -56,8 +59,10 @@ class testModel:
         if self.selection_method == "elasticnet":
             self.search_space["l1ratio"] = hp.uniform("l1ratio", 0.009, 0.05)
 
-        kf = KFold(n_splits=10, shuffle=True, random_state=42)
-        for fold, (train_val_index, test_index) in enumerate(kf.split(self.X)):
+        kf = GroupKFold(n_splits=10)
+        for fold, (train_val_index, test_index) in enumerate(
+            kf.split(self.X, groups=self.ringnrs)
+        ):
             self.X_train_val, self.X_test = (
                 self.X.iloc[train_val_index],
                 self.X.iloc[test_index],
@@ -66,6 +71,7 @@ class testModel:
                 self.Y.iloc[train_val_index],
                 self.Y.iloc[test_index],
             )
+            self.mean_pheno_test = self.mean_pheno.iloc[test_index]
             print("Fold", fold + 1, "of", kf.get_n_splits(self.X))
             if isinstance(self.model, str):
                 if self.model == "INLA":
@@ -136,6 +142,20 @@ class testModel:
                 "num_features": len(sorted_features),
                 "features": sorted_features,
             }
+        elif self.selection_method == "spearcorr":
+            sel_corr = abs(
+                self.X_train_val.corrwith(self.Y_train_val, method="spearman")
+            )
+            sel_corr.sort_values(ascending=False, inplace=True)
+            sel_corr = sel_corr[: round(len(sel_corr) * self.feature_percentile)]
+            sorted_features = sel_corr.index.tolist()
+            self.X_train_val_red = self.X_train_val[sorted_features]
+            self.X_test_red = self.X_test[sorted_features]
+            self.sel = {
+                "method": "correlation",
+                "num_features": len(sorted_features),
+                "features": sorted_features,
+            }
         elif self.selection_method == "elasticnet":
             reg = ElasticNet(l1_ratio=self.l1ratio)
             reg.fit(self.X_train_val, self.Y_train_val)
@@ -189,7 +209,7 @@ class testModel:
                 self.y_pred = reg.predict(self.X_val)  # type: ignore
                 try:
                     losses[tunefold] = self.score_func(self.Y_val, self.y_pred)
-                except:
+                except Exception as e:
                     losses[tunefold] = mean_squared_error(self.Y_val, self.y_pred)
             return {
                 "loss": np.mean(losses),
@@ -215,7 +235,7 @@ class testModel:
             self.y_pred = reg.predict(self.X_val)
             try:
                 losses = self.score_func(self.Y_val, self.y_pred)
-            except:
+            except Exception as e:
                 losses = mean_squared_error(self.Y_val, self.y_pred)
             return {"loss": losses, "status": STATUS_OK}
 
@@ -250,10 +270,11 @@ class testModel:
         self.y_pred = reg.predict(self.X_test)  # type: ignore
         try:
             self.score = self.score_func(self.Y_test, self.y_pred)
-        except:
+        except Exception as e:
             self.score = mean_squared_error(self.Y_test, self.y_pred)
 
         self.corr = pearsonr(self.Y_test, self.y_pred)[0]
+        self.corr = pearsonr(self.mean_pheno_test, self.y_pred)[0]
 
     def save(self):
         """Save model to file"""
@@ -297,7 +318,7 @@ class testModel:
             if not isinstance(self.model, str):
                 feat_perc_df[self.name] = feature_percentiles
 
-        except:
+        except Exception as e:
             corrs_df = pd.DataFrame({self.name: corrs})
             MSE_df = pd.DataFrame({self.name: scores})
             feat_perc_df = pd.DataFrame({self.name: feature_percentiles})
@@ -397,7 +418,7 @@ class testModel:
             .to_feather(self.data_path + "temp//ringnr_test.feather")
         )
         res = subprocess.call(
-            f"Rscript --vanilla runINLA.R {self.phenotype}", shell=True
+            f"Rscript --vanilla runINLA.R {self.phenotype} {self.typeofmod}", shell=True
         )
         if res == 0:
             results = pd.read_feather(self.data_path + "//temp//INLA_result.feather")
