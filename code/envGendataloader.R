@@ -15,6 +15,7 @@ data_path <- "~/../../../../work/didrikls/ProjectThesis/data/"
 
 args <- commandArgs(trailingOnly = TRUE)
 phenotype <- args[1]
+
 if (!require(nadiv)) {
     install.packages("nadiv", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 }
@@ -146,11 +147,15 @@ set.seed(323422)
 
 # Generate a data frame where individuals with ring numbers from d.ID.res.mass are contained, as well as the phenotype (here the residuals from the lmer analysis with mass as response)
 # d.dat <- merge(d.ID.pheno[, c("ringnr", "ID")], SNP.matrix.reduced, by = "ringnr")
-d.dat.full <- merge(dd_red, SNP.matrix, by = "ringnr")
-
+#d.dat.full <- merge(dd_red, SNP.matrix, by = "ringnr")
+d.dat.full <- merge(dd, SNP.matrix,by = "ringnr" )
+# names_list2 <- c(
+#     phenotype, "ringnr", "sex", "FGRM", "outer", "hatchyear", names(SNP.matrix)[7:length(names(SNP.matrix))]
+# )
 names_list2 <- c(
-    phenotype, "ringnr", "sex", "FGRM", "outer", "hatchyear", names(SNP.matrix)[7:length(names(SNP.matrix))]
+    phenotype, "ringnr","age","month","other","island_current", "sex", "FGRM", "outer", "hatchyear", names(SNP.matrix)[7:length(names(SNP.matrix))]
 )
+
 
 d.dat.full <- d.dat.full[, names_list2]
 d.dat.full <- as.data.frame(

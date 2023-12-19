@@ -84,6 +84,7 @@ library(dplyr)
 # library(dplyr)
 
 # Data preparation helper script:
+phenotype <- "mass"
 source("h_dataPrep.r")
 
 # Some data wranging to ensure that the IDs in the data correspond to the IDs in the A and G-matrices (nothing to worry about):
@@ -159,6 +160,9 @@ SNP.matrix <- data.frame(fread(paste(data_path, "Helgeland_01_2018_QC.raw", sep 
 names(SNP.matrix)[2] <- "ringnr"
 dim(SNP.matrix)
 set.seed(323422)
+sum(unique(d.pheno$ringnr) %in% unique(d.map$ringnr))
+sum(d.ID.pheno$ringnr %in% SNP.matrix$ringnr)
+length(unique(SNP.matrix$ringnr))
 
 SNP.matrix.reduced <- cbind(
     SNP.matrix[, 1:6],

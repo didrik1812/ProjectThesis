@@ -17,7 +17,7 @@ data_path <- "~/../../../../work/didrikls/ProjectThesis/data/"
 
 # If you are running in "interaction" mode  (not from terminal),
 # you can just uncomment this to get the script to work:
-phenotype <- "mass"
+phenotype <- "tarsus"
 
 if (!require(nadiv)) {
     install.packages("nadiv", repos = "http://cran.us.r-project.org", dependencies = TRUE)
@@ -114,8 +114,34 @@ d.morph$IDC4 <- d.morph$IDC3 <- d.morph$IDC2 <- d.morph$IDC
 
 corr_cvs_EG <- c()
 corr_cvs_G <- c()
+
+# Relatedness matrix from Henrik (vanRaden method 1) where +0.01 was already added to diagnoal!
+d.Gmatrix <- read.table(paste(data_path, "gghatvr3.triangle.g", sep = ""), header = F, sep = " ")
+
+# keep only relatednesses that are relevant for animals in d.morph
+# d.Gmatrix <- d.Gmatrix[d.Gmatrix[,1] %in% d.morph$ID & d.Gmatrix[,2] %in% d.morph$ID, ]
+
+# G is a sparse matrix object. We can also verify that it is symmetric (sometimes some numerical problems lead to non-symmetry)
+G <- sparseMatrix(i = d.Gmatrix[, 1], j = d.Gmatrix[, 2], x = d.Gmatrix[, 3], symmetric = T)
+G[, ] <- as.numeric(G[, ])
+isSymmetric(G)
+
+# Again extract the rows and columns for the individuals in the data set that we analyse
+GG <- G[d.map[1:3116, 3], d.map[1:3116, 3]]
+
+# To ensure that the matrix is positive definite, we do a computational trick (proposed by vanRaden 2008, see https://doi.org/10.3168/jds.2007-0980 :)
+AAA <- diag(dim(GG)[1])
+GGG <- GG * 0.99 + 0.01 * AAA # replace by Identity matrix
+
+# Need to derive the inverse to give to INLA
+Cmatrix <- solve(GGG)
+if (!isSymmetric(Cmatrix)) {
+    Cmatrix <- forceSymmetric(Cmatrix)
+}
+
+
 # Get CV-indexes
-for (i in 0:10) {
+for (i in 0:9) {
     ringnr_train <- pull(arrow::read_feather(paste(data_path, "temp/ringnr_train_", i, ".feather", sep = "")), "ringnr")
     ringnr_test <- pull(arrow::read_feather(paste(data_path, "temp/ringnr_test_", i, ".feather", sep = "")), "ringnr")
 
@@ -157,29 +183,6 @@ for (i in 0:10) {
     ### !!! This is very slow - account for at least 20-30min waiting time before inla terminates !!!
     ##################################################################
 
-    # Relatedness matrix from Henrik (vanRaden method 1) where +0.01 was already added to diagnoal!
-    d.Gmatrix <- read.table(paste(data_path, "gghatvr3.triangle.g", sep = ""), header = F, sep = " ")
-
-    # keep only relatednesses that are relevant for animals in d.morph
-    # d.Gmatrix <- d.Gmatrix[d.Gmatrix[,1] %in% d.morph$ID & d.Gmatrix[,2] %in% d.morph$ID, ]
-
-    # G is a sparse matrix object. We can also verify that it is symmetric (sometimes some numerical problems lead to non-symmetry)
-    G <- sparseMatrix(i = d.Gmatrix[, 1], j = d.Gmatrix[, 2], x = d.Gmatrix[, 3], symmetric = T)
-    G[, ] <- as.numeric(G[, ])
-    isSymmetric(G)
-
-    # Again extract the rows and columns for the individuals in the data set that we analyse
-    GG <- G[d.map[1:3116, 3], d.map[1:3116, 3]]
-
-    # To ensure that the matrix is positive definite, we do a computational trick (proposed by vanRaden 2008, see https://doi.org/10.3168/jds.2007-0980 :)
-    AAA <- diag(dim(GG)[1])
-    GGG <- GG * 0.99 + 0.01 * AAA # replace by Identity matrix
-
-    # Need to derive the inverse to give to INLA
-    Cmatrix <- solve(GGG)
-    if (!isSymmetric(Cmatrix)) {
-        Cmatrix <- forceSymmetric(Cmatrix)
-    }
 
     ##
     ## INLA formula
