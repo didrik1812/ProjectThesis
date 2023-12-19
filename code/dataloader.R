@@ -1,15 +1,11 @@
 #######################################################################
-## Stefanie Muff, September 2023
-##
-## Helgeland house sparrow data analysis
-## Make predictions using Machine Learning (deep learning)
-## In addition, at the end we give code for the genomics-based animal model fitted with INLA
-## !! This requires that you are using R version 4.2 or higher (ideally even 4.3) !!
+## Didrik Sand, September 2024
+# Script is based on code from Stefanie Muff
+## This script is used to extract the data needed for the two-step approach
+# The script should not be run directly, but rather from the configuration script code/model_exploration.py
 #######################################################################
 
-
-# setwd("C:\\Users\\didri\\OneDrive - NTNU\\9.semester\\Prosjekt\\ProjectThesis\\code")
-
+# CHANGE THIS TO YOUR OWN PATH: (i.e where the data is stored)
 data_path <- "~/../../../../work/didrikls/ProjectThesis/data/"
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -113,7 +109,7 @@ d.morph$IDC4 <- d.morph$IDC3 <- d.morph$IDC2 <- d.morph$IDC
 d.pheno <- d.morph[!is.na(d.morph[phenotype]), c("ringnr", phenotype)]
 names(d.pheno) <- c("ringnr", phenotype)
 
-
+# RUN LMM ON PHENOTYPE TO SEPARETE ID EFFECT FROM ENVIRONMENTAL EFFECTS
 d.mean.pheno <- as.data.frame(d.pheno %>%
     group_by(ringnr) %>%
     summarize(mean_pheno = mean(eval(as.symbol(phenotype)))))
@@ -143,10 +139,6 @@ d.ID.pheno <- data.frame(ringnr = d.mean.pheno[, 1], ID.mass = ranef(r.pheno.lme
 # We take as the new phenotype the estimated ID effect:
 d.ID.pheno <- data.frame(ringnr = d.mean.pheno[, 1], ID = d.ID.pheno[, 2], mean_pheno = d.mean.pheno$mean_pheno)
 
-# ## This was the OLD way - I don't think it should be done:
-# # We take as the new phenotype the sum of the ID effect and the mean of the residual for each individual:
-# d.ID.res.mass <- data.frame(ringnr=d.mean.mass[,1],sum.ID.res = d.ID.mass[,2]+d.mean.mass.res[,2])
-
 #############################################################
 ### Now we also load the raw SNP data matrix
 #############################################################
@@ -172,6 +164,6 @@ SNP.matrix.reduced <- cbind(
 
 # Generate a data frame where individuals with ring numbers from d.ID.res.mass are contained, as well as the phenotype (here the residuals from the lmer analysis with mass as response)
 d.dat <- merge(d.ID.pheno[, c("ringnr", "ID")], SNP.matrix.reduced, by = "ringnr")
-d.dat.full <- merge(d.ID.pheno[, c("ringnr", "ID","mean_pheno")], SNP.matrix, by = "ringnr")
-
+d.dat.full <- merge(d.ID.pheno[, c("ringnr", "ID", "mean_pheno")], SNP.matrix, by = "ringnr")
+# SAVE THE FULL DATA SET:
 write_feather(d.dat.full, paste(data_path, phenotype, ".feather", sep = ""))

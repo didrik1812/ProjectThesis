@@ -1,21 +1,21 @@
 #######################################################################
-## Stefanie Muff, September 2023
-##
-## Helgeland house sparrow data analysis
-## Make predictions using Machine Learning (deep learning)
-## In addition, at the end we give code for the genomics-based animal model fitted with INLA
-## !! This requires that you are using R version 4.2 or higher (ideally even 4.3) !!
+## Didrik Sand, September 2024
+# Script is based on code from Stefanie Muff
+## This script is used to extract the data needed for the one-step approach
+# The script should not be run directly, but rather from the configuration script code/model_exploration.py
 #######################################################################
 
 
-# Packages needed for the script to run:
+
+
 # setwd("C:\\Users\\didri\\OneDrive - NTNU\\9.semester\\Prosjekt\\ProjectThesis\\code")
 
+# CHANGE THIS TO YOUR OWN PATH: (i.e where the data is stored)
 data_path <- "~/../../../../work/didrikls/ProjectThesis/data/"
-
 args <- commandArgs(trailingOnly = TRUE)
 phenotype <- args[1]
 
+# Packages needed for the script to run:
 if (!require(nadiv)) {
     install.packages("nadiv", repos = "http://cran.us.r-project.org", dependencies = TRUE)
 }
@@ -146,17 +146,13 @@ set.seed(323422)
 
 
 # Generate a data frame where individuals with ring numbers from d.ID.res.mass are contained, as well as the phenotype (here the residuals from the lmer analysis with mass as response)
-# d.dat <- merge(d.ID.pheno[, c("ringnr", "ID")], SNP.matrix.reduced, by = "ringnr")
-#d.dat.full <- merge(dd_red, SNP.matrix, by = "ringnr")
 d.dat.full <- merge(dd, SNP.matrix,by = "ringnr" )
-# names_list2 <- c(
-#     phenotype, "ringnr", "sex", "FGRM", "outer", "hatchyear", names(SNP.matrix)[7:length(names(SNP.matrix))]
-# )
+# columns should be included in the data frame:
 names_list2 <- c(
     phenotype, "ringnr","age","month","other","island_current", "sex", "FGRM", "outer", "hatchyear", names(SNP.matrix)[7:length(names(SNP.matrix))]
 )
 
-
+# write data to feather file:
 d.dat.full <- d.dat.full[, names_list2]
 d.dat.full <- as.data.frame(
     d.dat.full %>% distinct()

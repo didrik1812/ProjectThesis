@@ -1,3 +1,10 @@
+##############################################
+#       Model exploration class             #
+# Performs feature selection, hyperparameter#
+# tuning and cross validation for a given   #
+# model and phenotype.                      #
+##############################################
+# Importing modules
 from dataclasses import dataclass
 from hyperopt import hp, fmin, tpe, STATUS_OK, Trials
 import numpy as np
@@ -12,6 +19,17 @@ from sklearn.model_selection import GroupKFold
 import os
 import subprocess
 from pathlib import Path
+
+# SET GLOBAL CONFIG VARIABLES, CHANGE AS NEEDED
+# set path to where tmp data should be stored (for INLA)
+# and where models and output should be saved
+DATA_PATH = (
+    Path.home().parent.parent.parent.parent
+    / "work"
+    / "didrikls"
+    / "ProjectThesis"
+    / "data"
+)
 
 
 @dataclass
@@ -29,8 +47,7 @@ class testModel:
     ringnrs: pd.Series = None
     mean_pheno: pd.Series = None
     # Other sepcifiers
-    selection_method: str = "corr"
-    typeofmod: str = "G"
+    selection_method: str = "corr"  # Or "spearcorr", "kendallcorr", "elasticnet"
 
     # variables to be used later
     score: float = 0  # MSE
@@ -38,33 +55,29 @@ class testModel:
     best_params = {}  # best parameters
     CV_results = {}  # results from CV
     feature_percentile: float = 0.1  # how many features
-    num_trials: int = 20  # max evaluations in hyperparamter tuning
+    num_trials: int = 30  # max evaluations in hyperparamter tuning
     iterations: int = None  # How many boosting iterations
 
-    data_path = (
-        Path.home().parent.parent.parent.parent
-        / "work"
-        / "didrikls"
-        / "ProjectThesis"
-        / "data"
-    )
+    data_path = DATA_PATH
 
     def cross_validate(self):
         """Do 10 fold cross validation with the given data and model"""
 
         print("Starting cross validation")
-        np.random.seed(42)  # ensure same seed
+        np.random.seed(42)  # ensure same seed across all models
+        # add feature percentile to search space
         self.search_space["feature_percentile"] = hp.uniform(
             "feature_percentile", 0.1, 0.9
         )
+        # elasticnet needs l1ratio
         if self.selection_method == "elasticnet":
             self.search_space["l1ratio"] = hp.uniform("l1ratio", 0.009, 0.05)
-
+        # Start cross validation with 10 folds, splits on ringnr
         kf = GroupKFold(n_splits=10)
-        # kf = KFold(n_splits=10, random_state=42, shuffle=True)
         for fold, (train_val_index, test_index) in enumerate(
             kf.split(self.X, groups=self.ringnrs)
         ):
+            # split data into train_val and test
             self.X_train_val, self.X_test = (
                 self.X.iloc[train_val_index],
                 self.X.iloc[test_index],
@@ -73,18 +86,21 @@ class testModel:
                 self.Y.iloc[train_val_index],
                 self.Y.iloc[test_index],
             )
+            # Not always mean_pheno is given
             try:
                 self.mean_pheno_test = self.mean_pheno.iloc[test_index]
             except Exception as e:
                 pass
             print("Fold", fold + 1, "of", kf.get_n_splits(self.X))
+            # If INLA is used a different approach is used (no hyperparmeter tuning),
+            # CV indexes is sent to a seperate R script
             if isinstance(self.model, str):
                 if self.model == "INLA":
                     self.run_INLA(train_val_index, test_index, fold)
-            else:
-                self.hyperparameter_tuning()
-                self.eval()
-
+            else:  # If not INLA, feature selection and hyperparameter tuning is done
+                self.hyperparameter_tuning()  # Find best hyperparameters
+                self.eval()  # Evaluate model on test set using best hyperparameters
+            # Save results from fold
             self.CV_results[fold] = {
                 "scores": self.score,
                 "corrs": self.corr,
@@ -93,7 +109,7 @@ class testModel:
                 "feature_percentile": self.feature_percentile,
             }
             print(f"Fold {fold+1} complete, score = {self.score}, corr = {self.corr}")
-
+        # Find best performing fold and save model
         self.best_settings = max(
             self.CV_results, key=lambda x: self.CV_results[x]["corrs"]
         )
@@ -111,10 +127,13 @@ class testModel:
     def feature_selection(self):
         """Perform feature selection with selected method"""
         if self.selection_method == "corr":
+            # Calculate correlation between features and response
             sel_corr = abs(self.X_train_val.corrwith(self.Y_train_val))
             sel_corr.sort_values(ascending=False, inplace=True)
+            # Select most correlated features based on percentile
             sel_corr = sel_corr[: round(len(sel_corr) * self.feature_percentile)]
             sorted_features = sel_corr.index.tolist()
+            # Reduce data to only selected features
             self.X_train_val_red = self.X_train_val[sorted_features]
             self.X_test_red = self.X_test[sorted_features]
             self.sel = {
@@ -165,13 +184,18 @@ class testModel:
             }
 
         self.choosen_features[self.feature_percentile] = sorted_features
+        # If elasticnet is used, feature percentile is calculated based on number of non-zero coeficients
         if self.selection_method == "elasticnet":
             self.feature_percentile = round(
                 len(c.index) / len(self.X_train_val.columns), 2
             )
 
     def objective(self, params):
-        """Objective function for hyperparameter tuning"""
+        """
+        Objective function for hyperparameter tuning,
+        fits model on trainining set and returns MSE on validation set
+        """
+        # Some preprocessing is needed for some models
         self.feature_percentile = params.pop("feature_percentile")
         if self.selection_method == "elasticnet":
             self.l1ratio = params.pop("l1ratio")
@@ -208,7 +232,10 @@ class testModel:
         return {"loss": losses, "status": STATUS_OK}
 
     def hyperparameter_tuning(self):
-        """Optimize hyperparameters using bayesian optimization"""
+        """
+        Optimize hyperparameters using bayesian optimization, 
+        utilizing hyperopt and the objective function
+        """
         self.choosen_features = {}
         trials = Trials()
         best = fmin(
@@ -222,12 +249,14 @@ class testModel:
 
     def eval(self):
         """Train model using best hyperparameters and evaluate it on test set"""
+        # need some preprocessing for some models
+        # feature percentile is used to select features and is not a hyperparameter to be sent in the models
         best_feat_perc = self.best_params.pop("feature_percentile")
         if self.selection_method == "elasticnet":
             self.l1ratio = self.best_params.pop("l1ratio")
-
+        # initialize model with best hyperparameters
         reg = self.model(**self.best_params)
-
+        # reduce data to only selected features
         self.X_train_val = self.X_train_val[self.choosen_features[best_feat_perc]]
         self.X_test = self.X_test[self.choosen_features[best_feat_perc]]
 
@@ -243,12 +272,13 @@ class testModel:
         self.corr = pearsonr(self.Y_test, self.y_pred)[0]
 
     def save(self):
-        """Save the best performing folds model to file"""
-
+        """Save the best performing folds model to picklke file"""
+        # create folders if they dont exist
         os.makedirs(f"models/{self.name}", exist_ok=True)
         os.makedirs("results", exist_ok=True)
-
+        # save CV results
         self.save_results()
+        # save model objects
         with open(f"models/{self.name}/{self.name}.pkl", "wb") as f:
             pickle.dump(self.best_model, f)
         with open(f"models/{self.name}/{self.name}_best_sel.pkl", "wb") as f:
@@ -260,7 +290,8 @@ class testModel:
             )
 
     def save_results(self):
-        """Save feature_percentile, correlations and MSE"""
+        """Save feature_percentile, correlations and MSE from each fold"""
+        # some exeptions are needed for INLA
         if not isinstance(self.model, str):
             x = sorted(
                 self.CV_results,
@@ -269,10 +300,11 @@ class testModel:
             )
         else:
             x = self.CV_results.keys()
+        # extract results from CV
         scores = [self.CV_results[key]["scores"] for key in x]
         corrs = [self.CV_results[key]["corrs"] for key in x]
         feature_percentiles = [self.CV_results[key]["feature_percentile"] for key in x]
-
+        # save to pickled dataframes
         try:
             corrs_df = pd.read_pickle("results/corrs_df.pkl")
             MSE_df = pd.read_pickle("results/MSE_df.pkl")
@@ -310,18 +342,4 @@ class testModel:
             .reset_index()
             .to_feather(self.data_path / "temp" / f"ringnr_test_{fold}.feather")
         )
-        return
-        res = subprocess.call(
-            f"Rscript runINLA.R {self.phenotype} {self.typeofmod}", shell=True
-        )
-        if res == 0:
-            results = pd.read_feather(self.data_path / "temp" / "INLA_result.feather")
-
-            self.score = float(results["score"].iloc[0])
-            self.corr = float(results["corr"].iloc[0])
-            self.best_params = None
-            self.feature_percentile = None
-            self.sel = None
-        else:
-            print(res)
-            quit()
+        return 0

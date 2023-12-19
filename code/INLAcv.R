@@ -1,23 +1,22 @@
 #######################################################################
-## Stefanie Muff, September 2023
-##
-## Helgeland house sparrow data analysis
-## Make predictions using Machine Learning (deep learning)
-## In addition, at the end we give code for the genomics-based animal model fitted with INLA
+## Didrik Sand, September 2024
+# Script is based on code from Stefanie Muff
+## This script is used to run cross-validation with the genomics-based animal model fitted with INLA
+# The script should not be run directly, but rather from the configuration script code/model_exploration.py
 ## !! This requires that you are using R version 4.2 or higher (ideally even 4.3) !!
 #######################################################################
 
 
-# Packages needed for the script to run:
-# install.packages("jsonlite")
+
 rm(list = ls())
 data_path <- "~/../../../../work/didrikls/ProjectThesis/data/"
-
+args <- commandArgs(trailingOnly = TRUE)
+phenotype <- args[1] # say which phenotype we want to predict
 
 
 # If you are running in "interaction" mode  (not from terminal),
 # you can just uncomment this to get the script to work:
-phenotype <- "tarsus"
+# phenotype <- "bodymass"
 
 if (!require(nadiv)) {
     install.packages("nadiv", repos = "http://cran.us.r-project.org", dependencies = TRUE)
@@ -61,9 +60,6 @@ if (!require(INLA)) {
     # BiocManager::install(c("graph", "Rgraphviz"), dep=TRUE)
     install.packages("INLA", repos = c(getOption("repos"), INLA = "https://inla.r-inla-download.org/R/stable"), dep = TRUE)
 }
-# install.packages("BiocManager")
-# BiocManager::install(c("graph", "Rgraphviz"), dep=TRUE)
-
 # For reading feather formats
 # Sys.setenv(NOT_CRAN = "true")
 # install.packages("arrow")
@@ -73,14 +69,12 @@ library(MASS)
 library(MCMCpack)
 library(MCMCglmm)
 # This is a self-made package that I send you to install locally:
-library(SMisc)
+library(SMisc) # Take contact if you do not have this
 
 
 library(dplyr)
 library(INLA)
-# inla.setOption(inla.mode = "experimental", mkl = TRUE) # mkl = True
-# library(keras)
-# library(tensorflow)
+
 
 ## Old packages no longer needed (but kept as comments, in case we need them in the future...)
 # library(MasterBayes)
@@ -93,8 +87,6 @@ library(INLA)
 
 # Data preparation helper script:
 source("h_dataPrep.r")
-# source("code/h_dataPrep.r")
-
 
 # Some data wranging to ensure that the IDs in the data correspond to the IDs in the A and G-matrices (nothing to worry about):
 # indicates that some IDs are missing:
@@ -139,9 +131,9 @@ if (!isSymmetric(Cmatrix)) {
     Cmatrix <- forceSymmetric(Cmatrix)
 }
 
-
-# Get CV-indexes
+# Run 10-fold cross-validation
 for (i in 0:9) {
+    # get CV indices
     ringnr_train <- pull(arrow::read_feather(paste(data_path, "temp/ringnr_train_", i, ".feather", sep = "")), "ringnr")
     ringnr_test <- pull(arrow::read_feather(paste(data_path, "temp/ringnr_test_", i, ".feather", sep = "")), "ringnr")
 
@@ -153,17 +145,14 @@ for (i in 0:9) {
     n_train <- dim(d.morph_train)[1]
     n_test <- dim(d.morph_test)[1]
     N <- n_train + n_test
-    # Save the phenotypic value in the test set, if we only looking at genetic effects we take the average
 
+    # Save the phenotypic value in the test set, if we only looking at genetic effects (two-step) we take the average
     pheno_test_EG <- d.morph_test[, phenotype]
     pheno_test <- as.data.frame(d.morph_test %>%
         group_by(ringnr) %>%
         summarize(
             mean_pheno = mean(eval(as.symbol(phenotype)))
         ))[, "mean_pheno"]
-
-
-
 
     # However, INLA has no predict function, so have to fill the test-values with NAs and then merge it back into the train-set
     d.morph_test[, phenotype] <- NA
@@ -232,4 +221,5 @@ for (i in 0:9) {
     corr_cvs_G <- c(corr_cvs_G, corr)
     corr_cvs_EG <- c(corr_cvs_EG, corr_EG)
 }
+# save results
 arrow::write_feather(data.frame(corr_EG = corr_cvs_EG, corr_G = corr_cvs_G), paste(data_path, "/temp/INLA_result.feather", sep = ""))
